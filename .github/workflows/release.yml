@@ -1,0 +1,42 @@
+name: Release
+on:
+  push: { tags: ["v*"] }
+permissions: { contents: read }
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions: { contents: write, id-token: write, attestations: write }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - name: Tag matches package version
+        run: grep -qx "version: ${GITHUB_REF_NAME#v}" pubspec.yaml
+      - run: flutter test
+      - name: Source archive
+        run: git archive --format=tar.gz --prefix="${{ github.event.repository.name }}-${GITHUB_REF_NAME}/" -o "${{ github.event.repository.name }}-${GITHUB_REF_NAME}.tar.gz" HEAD
+      - name: Build provenance attestation
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            *.tar.gz
+      - name: GitHub release
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: gh release create "$GITHUB_REF_NAME" *.tar.gz --generate-notes --verify-tag
+  pub:
+    # Turn on after enabling automated publishing on pub.dev for this repo with tag pattern v{{version}} (repo variable PUB_PUBLISH=true).
+    if: vars.PUB_PUBLISH == 'true'
+    needs: release
+    runs-on: ubuntu-latest
+    permissions: { id-token: write }
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with: { channel: stable, cache: true }
+      - run: flutter pub get
+      - name: Publish to pub.dev (GitHub OIDC, no token)
+        run: flutter pub publish --force
