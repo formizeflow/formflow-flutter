@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:formizeflow/formflow.dart';
+import 'package:formizeflow/formizeflow.dart';
 
 void main() {
   test('url encodes everything', () {
